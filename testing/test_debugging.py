@@ -197,6 +197,32 @@ class TestPDB:
         child.sendeof()
         self.flush(child)
 
+    def test_pdb_unittest_skip_teardown_not_called(self, testdir):
+        """Test that tearDown is not called on skipped unittest tests when --pdb is used.
+        This test addresses the issue where tearDown was being executed on skipped tests
+        when running with --pdb, which should not happen.
+        """
+        p1 = testdir.makepyfile(
+            """
+            import unittest
+            class MyTestCase(unittest.TestCase):
+                def setUp(self):
+                    raise NameError("setUp should not be called")
+                @unittest.skip("test should be skipped")
+                def test_one(self):
+                    pass
+                def tearDown(self):
+                    raise NameError("tearDown should not be called")
+        """
+        )
+        result = testdir.runpytest_inprocess("--pdb", p1)
+        # The test should be skipped without any errors from setUp or tearDown
+        assert result.ret == 0
+        result.stdout.fnmatch_lines(["* 1 skipped in *"])
+        # Ensure no NameError from tearDown appears in output
+        assert "tearDown should not be called" not in result.stdout.str()
+        assert "setUp should not be called" not in result.stdout.str()
+
     def test_pdb_print_captured_stdout_and_stderr(self, testdir):
         p1 = testdir.makepyfile(
             """
